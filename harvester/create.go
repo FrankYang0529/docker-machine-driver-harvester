@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+	"kubevirt.io/kubevirt/pkg/controller"
 
 	"github.com/harvester/harvester/pkg/builder"
 )
@@ -134,7 +135,7 @@ func (d *Driver) Create() error {
 }
 
 func (d *Driver) waitForState(desiredState state.State) error {
-	log.Debugf("Waiting for node become %s", desiredState)
+	log.Infof("Waiting for node to become %s", desiredState)
 	if err := mcnutils.WaitForSpecific(drivers.MachineInState(d, desiredState), 120, 5*time.Second); err != nil {
 		return fmt.Errorf("Too many retries waiting for machine to be %s.  Last error: %s", desiredState, err)
 	}
@@ -146,7 +147,7 @@ func (d *Driver) waitForIP() error {
 		ip, _ := d.GetIP()
 		return ip != ""
 	}
-	log.Debugf("Waiting for node get ip")
+	log.Infof("Waiting for node to get ip")
 	if err := mcnutils.WaitForSpecific(ipIsNotEmpty, 120, 5*time.Second); err != nil {
 		return fmt.Errorf("Too many retries waiting for get machine's ip.  Last error: %s", err)
 	}
@@ -155,6 +156,22 @@ func (d *Driver) waitForIP() error {
 
 func (d *Driver) waitForReady() error {
 	if err := d.waitForState(state.Running); err != nil {
+		vm, getVMErr := d.getVM()
+		if getVMErr != nil {
+			return fmt.Errorf("can't get vm %s/%s, err: %w", d.VMNamespace, d.MachineName, getVMErr)
+		}
+
+		vmConditionManager := controller.NewVirtualMachineConditionManager()
+		podScheduledCond := vmConditionManager.GetCondition(vm, kubevirtv1.VirtualMachineConditionType(corev1.PodScheduled))
+		if podScheduledCond != nil && podScheduledCond.Status == corev1.ConditionFalse {
+			return fmt.Errorf("can't schedule vm %s/%s, reason: %s", d.VMNamespace, d.MachineName, podScheduledCond.Reason)
+		}
+
+		readyCond := vmConditionManager.GetCondition(vm, kubevirtv1.VirtualMachineReady)
+		if readyCond != nil && readyCond.Status == corev1.ConditionFalse {
+			return fmt.Errorf("vm %s/%s is not ready, reason: %s", d.VMNamespace, d.MachineName, readyCond.Reason)
+		}
+
 		return err
 	}
 	return d.waitForIP()
