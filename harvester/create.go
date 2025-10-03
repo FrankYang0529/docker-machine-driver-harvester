@@ -32,6 +32,18 @@ const (
 )
 
 func (d *Driver) Create() error {
+	log.Infof("Listing PVCs in namespace %q", d.VMNamespace)
+	pvcs, err := d.getPVCs()
+	if err != nil {
+		log.Infof("Error listing PVCs in namespace %q: %v", d.VMNamespace, err)
+	}
+	log.Infof("Found %d PVCs in namespace %q", len(pvcs.Items), d.VMNamespace)
+
+	log.Infof("Delete PVC dummy in namespace %q", d.VMNamespace)
+	if err := d.deletePVC(); err != nil {
+		log.Infof("Error deleting PVC dummy in namespace %q: %v", d.VMNamespace, err)
+	}
+	log.Infof("Deleted PVC dummy in namespace %q", d.VMNamespace)
 	// create keypair
 	if err := d.createKeyPair(); err != nil {
 		return err

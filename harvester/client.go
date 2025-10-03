@@ -209,3 +209,19 @@ func (d *Driver) createSecret(secret *corev1.Secret) (*corev1.Secret, error) {
 	}
 	return c.KubeClient.CoreV1().Secrets(d.VMNamespace).Create(d.ctx, secret, metav1.CreateOptions{})
 }
+
+func (d *Driver) getPVCs() (*corev1.PersistentVolumeClaimList, error) {
+	c, err := d.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return c.KubeClient.CoreV1().PersistentVolumeClaims(d.VMNamespace).List(d.ctx, metav1.ListOptions{})
+}
+
+func (d *Driver) deletePVC() error {
+	c, err := d.getClient()
+	if err != nil {
+		return err
+	}
+	return c.KubeClient.CoreV1().PersistentVolumeClaims(d.VMNamespace).Delete(d.ctx, "dummy", metav1.DeleteOptions{})
+}
